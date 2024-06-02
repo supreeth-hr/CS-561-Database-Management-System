@@ -1,0 +1,155 @@
+Name: Supreeth Hassan Ravindra
+CWID: 20020533
+
+Query 1
+-------------------------------------------------------------------------------------------------------------------------------
+
+with original as(
+select prod, month, avg(quant) as avg_q
+from sales
+GROUP BY prod, month
+),
+
+before as(
+select q1.prod, q1.month, q2.avg_q AS prev_avg
+from original q1 left join original q2
+on q1.month - 1 = q2.month and q1.prod=q2.prod
+),
+
+after as (
+select q1.prod, q1.month, q2.avg_q AS next_avg
+from original q1 left join original q2
+on q1.month + 1 = q2.month and q1.prod=q2.prod
+),
+
+temp as (
+select c.prod, c.month, b.prev_avg, a.next_avg
+from before b natural join original c natural join after a
+),
+
+result as (
+select s.prod, s.month, count(quant) cnt_q
+from sales s, temp t
+where s.prod = t.prod
+and s.month = t.month
+and (s.quant between t.prev_avg and t.next_avg) or (s.quant between t.next_avg and t.prev_avg)
+and s.month between 2 and 11
+group by s.prod, s.month
+)
+
+select o.prod "PRODUCT", o.month "MONTH", r.cnt_q "SALES_COUNT_BETWEEN_AVGS"
+from original o left join result r
+on o.prod=r.prod and o.month=r.month
+order by o.prod, o.month;
+
+
+
+Query 2
+-------------------------------------------------------------------------------------------------------------------------------
+
+with ext_sales as
+(
+select cust, prod, month, ceiling(month/3.0) qtr, quant
+from sales
+),
+
+base as 
+(
+select cust, prod, qtr, avg(quant) as avg_q
+from ext_sales
+group by cust,prod,qtr
+),
+
+before as 
+(
+select a.cust, a.prod, a.qtr, b.avg_q as before_avg
+from base a left join base b
+on a.qtr - 1 =b.qtr 
+and a.prod = b.prod
+and a.cust = b.cust
+),
+
+after as 
+(
+select a.cust, a.prod, a.qtr, b.avg_q as after_avg
+from base a left join base b
+on a.qtr + 1 =b.qtr 
+and a.prod = b.prod
+and a.cust = b.cust
+)
+
+select c.cust "CUSTOMER", c.prod "PRODUCT", c.qtr "QRTR", round(b.before_avg,2) "BEFORE_AVG", round(c.avg_q,2) "DURING_AVG", round(a.after_avg,2) "AFTER_AVG"
+from before b natural join base c natural join after a
+order by c.cust, c.prod, c.qtr;
+
+
+
+Query 3
+-------------------------------------------------------------------------------------------------------------------------------
+
+with q1 as
+(
+select cust, prod, state, round(avg(quant),2) avg_q
+from sales
+group by cust, prod, state
+),
+
+q2 as
+(
+select q1.cust, q1.prod, q1.state, round(avg(s.quant),2) as c_avg
+from q1, sales s
+where q1.cust != s.cust 
+and q1.state = s.state 
+and q1.prod = s.prod
+group by q1.cust, q1.prod, q1.state	
+),
+
+q3 as
+(
+select q1.cust, q1.prod, q1.state, round(avg(s.quant),2) as p_avg
+from q1, sales s
+where q1.cust = s.cust 
+and q1.state = s.state 
+and q1.prod != s.prod
+group by q1.cust, q1.prod, q1.state	
+)
+
+select q1.cust "CUSTOMER", q1.prod "PRODUCT", q1.state "STATE", q1.avg_q "PROD_AVG", 
+q2.c_avg "OTHER_CUST_AVG",
+q3.p_avg "OTHER_PROD_AVG"
+from q1 natural join q2 natural join q3 
+order by q1.cust, q1.prod, q1.state;
+
+
+
+Query 4
+-------------------------------------------------------------------------------------------------------------------------------
+
+with q1 as (
+select prod,quant,
+(
+select count(*)
+from sales as t2
+where t2.quant <= t1.quant
+and t2.prod = t1.prod
+) as actual_count
+from sales as t1
+order by t1.prod, actual_count
+),
+
+q2 as (
+select q1.prod, max((actual_count + 1) / 2) as median
+from q1
+group by prod
+),
+
+q3 as (
+select q1.prod, q1.quant
+from q1, q2
+where q1.prod = q2.prod and q1.actual_count >= q2.median
+order by q1.prod, q1.quant
+)
+
+select q3.prod as "PRODUCT", min(q3.quant) as "MEDIAN QUANT"
+from q3
+group by q3.prod;

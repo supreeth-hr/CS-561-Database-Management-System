@@ -1,0 +1,155 @@
+Name: Supreeth Hassan Ravindra
+CWID: 20020533
+
+Query 1:
+
+with q1 as (
+	select cust, min(quant) min_quant,max(quant) max_quant, round(avg(quant),2) avg_q
+	from sales
+	group by cust
+),
+q2 as (
+	select q1.cust, q1.min_quant, sales.prod min_prod, sales.date min_date, sales.state min_state, q1.max_quant, q1.avg_q
+	from q1, sales
+	where q1.cust = sales.cust and q1.min_quant = sales.quant
+),
+q3 as (
+	select q2.cust customer, q2.min_prod,q2.min_quant, q2.min_date, q2.min_state, q2.max_quant, sales.prod max_prod, sales.date max_date, sales.state max_state, q2.avg_q
+	from q2, sales
+	where q2.cust = sales.cust and q2.max_quant = sales.quant
+)
+select * from q3 order by 1;
+
+
+Query 2:
+
+with q1 as (
+	select date,
+	(month-1)/3 +1 as quarter,  
+	sum(quant) as total_quant_per_day
+	from sales 
+	group by quarter, date
+),
+q2 as (
+	select quarter, max(total_quant_per_day) as max_quant, min(total_quant_per_day) as min_quant
+	from q1
+	group by quarter
+),
+max_quant_d as (
+	select q2.quarter, date, q2.max_quant
+	from q1,q2
+	where q1.quarter = q2.quarter and q1.total_quant_per_day = q2.max_quant
+),
+min_quant_d as (
+	select q2.quarter, date, q2.min_quant
+	from q1,q2
+	where q1.quarter = q2.quarter and q1.total_quant_per_day = q2.min_quant
+)
+select min_quant_d.quarter, min_quant_d.date as least_profit_day, min_quant_d.min_quant, max_quant_d.date as max_profit_day, max_quant_d.max_quant
+from min_quant_d, max_quant_d
+where min_quant_d.quarter = max_quant_d.quarter;
+
+
+Query 3:
+
+with q1 as (
+	select prod, month, sum(quant) as sum_quant
+	from sales
+	group by prod, month
+),
+q2 as (
+	select prod, max(sum_quant) as max_quant, min(sum_quant) as min_quant
+	from q1
+	group by prod
+),
+most_fav as (
+	select q2.prod, month, max_quant
+	from q1, q2
+	where q2.prod = q1.prod and q2.max_quant = q1.sum_quant
+),
+least_fav as (
+	select q2.prod, month, min_quant
+	from q1, q2
+	where q2.prod = q1.prod and q2.min_quant = q1.sum_quant
+)
+select most_fav.prod product, most_fav.month as most_fav_month, least_fav.month as least_fav_month
+from most_fav, least_fav
+where most_fav.prod = least_fav.prod
+order by most_fav.prod;
+
+
+Query 4:
+
+with main_t as (select cust, prod, avg(quant), count(quant), sum(quant) 
+			from sales 
+			group by cust, prod),
+q1 as (select cust,prod, round(avg(quant),2) as q1_avg 
+	  from sales 
+	  where month between 1 and 3 group by cust, prod
+),
+q2 as (select cust, prod, round(avg(quant),2) as q2_avg 
+ 	  from sales 
+      where month between 4 and 6 group by cust, prod
+),
+q3 as (select cust, prod, round(avg(quant),2) as q3_avg 
+ 	  from sales 
+      where month between 7 and 9 group by cust, prod
+),
+q4 as (select cust, prod, round(avg(quant),2) as q4_avg 
+       from sales 
+       where month between 10 and 12 group by cust, prod
+)
+select main_t.cust as "Customer",
+	   main_t.prod as "Product",
+	   q1.q1_avg as "Q1 Average",
+	   q2.q2_avg as "Q2 Average",
+	   q3.q3_avg as "Q3 Average",
+	   q4.q4_avg as "Q4 Average",
+	   main_t.avg as "Average",
+	   main_t.sum as "Total",
+	   main_t.count as "Count"
+	   from main_t left join q1 on q1.cust=main_t.cust and q1.prod=main_t.prod
+	   left join q2 on q2.cust=main_t.cust and q2.prod=main_t.prod
+	   left join q3 on q3.cust=main_t.cust and q3.prod=main_t.prod
+	   left join q4 on q4.cust=main_t.cust and q4.prod=main_t.prod;
+
+
+Query 5:
+
+with ct_maxq as(
+	select s.cust, s.prod, s.state, max(s.quant) as max_q
+	from sales as s
+	where state='CT'
+	group by cust, prod, state
+),
+nj_maxq as(
+	select s.cust, s.prod, s.state, MAX(s.quant) as max_q
+	from sales as s
+	where state='NJ'
+	group by cust, prod, state
+),
+ny_maxq as(
+	select s.cust, s.prod, s.state, MAX(s.quant) as max_q
+	from sales as s
+	where state='NY'
+	group by cust, prod, state
+),
+ct_max_d as(
+	select ct_maxq.cust,ct_maxq.prod, ct_maxq.state, ct_maxq.max_q, sales.date 
+	from ct_maxq, sales
+	where ct_maxq.cust = sales.cust AND ct_maxq.prod = sales.prod AND ct_maxq.state = sales.state AND ct_maxq.max_q = sales.quant
+),
+nj_max_d as(
+	select nj_maxq.cust,nj_maxq.prod, nj_maxq.state, nj_maxq.max_q, sales.date 
+	from nj_maxq, sales
+	where nj_maxq.cust = sales.cust AND nj_maxq.prod = sales.prod AND nj_maxq.state = sales.state AND nj_maxq.max_q = sales.quant
+),
+ny_max_d as(
+	select ny_maxq.cust,ny_maxq.prod, ny_maxq.state, ny_maxq.max_q, sales.date 
+	from ny_maxq, sales
+	where ny_maxq.cust = sales.cust AND ny_maxq.prod = sales.prod AND ny_maxq.state = sales.state AND ny_maxq.max_q = sales.quant
+)
+select ct_max_d.cust customer, ct_max_d.prod product, ct_max_d.max_q as CT_MAX, ct_max_d.date as CT_DATE, nj_max_d.max_q as NJ_MAX, nj_max_d.date as NJ_DATE, ny_max_d.max_q as NY_MAX, ny_max_d.date as NY_DATE
+from ct_max_d join nj_max_d on ct_max_d.cust = nj_max_d.cust and ct_max_d.prod = nj_max_d.prod
+join ny_max_d on ct_max_d.cust = ny_max_d.cust and ct_max_d.prod = ny_max_d.prod
+where ny_max_d.max_q > ct_max_d.max_q or ny_max_d.max_q > nj_max_d.max_q;
